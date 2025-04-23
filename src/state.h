@@ -31,3 +31,5 @@ game_state_t * initialize_snakes(game_state_t* state);
 game_state_t* load_board(char* filename);
 
 #endif
+
+game_state_t* create_amongus_state(); /*se agrego el puntero para usar el amongus*/

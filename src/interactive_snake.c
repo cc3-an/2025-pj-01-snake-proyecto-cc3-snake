@@ -11,15 +11,11 @@
 #include "snake_utils.h"
 #include "state.h"
 
-
-// Este codigo utiliza unos hacks bastante malos, y no deberia de utilizarse como
-// un "buen" codigo de referencia.
-
 struct timespec game_interval = {1, 0L};
 game_state_t* state = NULL;
 pthread_mutex_t state_mutex;
+int juego_activo = 1;  // NUEVA bandera global para controlar el loop de juego
 
-// Adaptado de https://stackoverflow.com/a/912796
 int get_raw_char() {
   if (!isatty(STDIN_FILENO)) {
     return getchar();
@@ -41,7 +37,7 @@ int get_raw_char() {
   if (read(STDIN_FILENO, &buf, 1) < 0) {
     perror("Error reading char from terminal");
   }
-  old.c_lflag = old_lflag;
+  old.c_lflag = old_lflag;  
   if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old) < 0) {
     perror("Error re-enabling terminal canonical mode");
   }
@@ -80,6 +76,7 @@ void* game_loop(void* _) {
     timestep += 1;
 
     if (live_snakes == 0) {
+      juego_activo = 0;  //  indicar que el juego terminó
       break;
     }
   }
@@ -88,7 +85,7 @@ void* game_loop(void* _) {
 }
 
 void input_loop() {
-  while (1) {
+  while (juego_activo) {  //  se detiene cuando juego_activo = 0
     char key = (char) get_raw_char();
     pthread_mutex_lock(&state_mutex);
     if (key == '[') {
@@ -114,40 +111,77 @@ void input_loop() {
 }
 
 int main(int argc, char* argv[]) {
-  char* in_filename = NULL;
+  int jugar = 1;
 
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-i") == 0 && i < argc - 1) {
-      in_filename = argv[i + 1];
-      i++;
-      continue;
+  while (jugar) {
+    printf("=====================================\n");
+    printf("        BIENVENIDO A SNAKE C\n");
+    printf("            Curso: CC3\n");
+    printf("=====================================\n");
+    printf("Seleccione el modo de juego:\n");
+    printf("  1. Snake Clásico (tablero regular)\n");
+    printf("  2. Snake Among Us (tablero irregular) \n");
+    printf("  0. Salir\n");
+
+    int modo = -1;
+    while (modo < 0 || modo > 2) {
+      printf("> ");
+      scanf("%d", &modo);
     }
-    if (strcmp(argv[i], "-d") == 0 && i < argc - 1) {
-      double delay = strtod(argv[i + 1], NULL);
-      if (delay == 0.0 && errno != 0) {
-        perror("Error parsing delay");
+
+    if (modo == 0) {
+      printf("Saliendo del juego...\n");
+      return 0;
+    }
+
+    // Procesamiento de argumentos
+    char* in_filename = NULL;
+    for (int i = 1; i < argc; i++) {
+      if (strcmp(argv[i], "-i") == 0 && i < argc - 1) {
+        in_filename = argv[i + 1];
+        i++;
+        continue;
       }
-      game_interval.tv_sec = (time_t) (unsigned int) delay;
-      game_interval.tv_nsec = (long) (delay * 1000000000) % 1000000000L;
-      i++;
-      continue;
+      if (strcmp(argv[i], "-d") == 0 && i < argc - 1) {
+        double delay = strtod(argv[i + 1], NULL);
+        if (delay == 0.0 && errno != 0) {
+          perror("Error parsing delay");
+        }
+        game_interval.tv_sec = (time_t)(unsigned int)delay;
+        game_interval.tv_nsec = (long)(delay * 1000000000) % 1000000000L;
+        i++;
+        continue;
+      }
+      fprintf(stderr, "Usage: %s [-i filename] [-d delay]\n", argv[0]);
+      return 1;
     }
-    fprintf(stderr, "Usage: %s [-i filename] [-d delay]\n", argv[0]);
-    return 1;
+
+    if (in_filename != NULL) {
+      state = load_board(in_filename);
+      state = initialize_snakes(state);
+    } else {
+      if (modo == 1)
+        state = create_default_state();
+      else if (modo == 2)
+        state = create_amongus_state();/*comentario del amngous*/
+    }
+
+    juego_activo = 1;
+    pthread_mutex_init(&state_mutex, NULL);
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, game_loop, NULL);
+    input_loop();
+    pthread_cancel(thread_id);
+    pthread_mutex_destroy(&state_mutex);
+
+    printf("\n=========== FIN DEL JUEGO ===========\n");
+    printf("¿Desea jugar otra vez? (1 = Sí, 0 = No): ");
+    scanf("%d", &jugar);
+    free_state(state);
+    state = NULL;
   }
 
-  // Leer el tablero de un archivo, o cargar el tablero por defecto
-  if (in_filename != NULL) {
-    state = load_board(in_filename);
-    state = initialize_snakes(state);
-  } else {
-    state = create_default_state();
-  }
-
-  pthread_t thread_id;
-  pthread_create(&thread_id, NULL, game_loop, NULL);
-  input_loop();
-  pthread_cancel(thread_id);
-
+  printf("\n¡Gracias por jugar SNAKE C!\n");
   return 0;
 }
+

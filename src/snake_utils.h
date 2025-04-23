@@ -12,7 +12,6 @@
 #define KEY_QUIT 0x71
 
 // Una funcion random deterministica simple. Lean sobre LFSR para aprender mas.
-// Ref: https://en.wikipedia.org/wiki/Linear-feedback_shift_register
 unsigned int det_rand(unsigned int* state);
 
 // Deterministicamente genera comida en el tablero.
